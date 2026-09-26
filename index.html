@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Escáner QR – I.E. San Miguel de Acos</title>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{--azul:#14286b;--azul2:#1f3a9a;--rojo:#c8102e;--oro:#e3b23c;--P:#1e8e4e;--T:#d98a00}
+*{box-sizing:border-box;margin:0}
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#0d1433;color:#fff;min-height:100vh}
+header{background:var(--azul);border-bottom:5px solid var(--oro);padding:12px 16px;display:flex;align-items:center;gap:10px}
+header b{flex:1;font-size:18px}
+header button{background:none;border:2px solid rgba(255,255,255,.5);color:#fff;border-radius:8px;padding:6px 12px;font-weight:700}
+main{max-width:520px;margin:0 auto;padding:14px}
+.card{background:#fff;color:#1b2240;border-radius:16px;padding:20px;margin-top:20px;border-top:6px solid var(--oro)}
+.card h1{font-size:22px;color:var(--azul);margin-bottom:6px}
+.card p{color:#5a6285;font-size:14px;margin-bottom:14px}
+label{display:block;font-weight:600;font-size:14px;margin:10px 0 4px}
+input{width:100%;padding:12px;border:2px solid #d5dbeb;border-radius:10px;font-size:16px}
+.btn{width:100%;margin-top:16px;padding:14px;border:0;border-radius:10px;background:var(--azul);color:#fff;font-size:17px;font-weight:700}
+.err{color:var(--rojo);font-weight:600;margin-top:10px;min-height:20px}
+.mov{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#1c2656;border-radius:12px;padding:5px;margin-bottom:12px}
+.mov button{border:0;padding:14px;border-radius:9px;font-size:20px;font-weight:800;background:none;color:#8f98c4}
+.mov button.on{background:var(--azul2);color:#fff}.mov button.on.s{background:var(--rojo)}
+#r{border-radius:14px;overflow:hidden;background:#000}
+#res{margin-top:12px;border-radius:14px;padding:16px;background:#3a4478;font-size:17px;min-height:70px}
+#res b{display:block;font-size:24px;line-height:1.1;margin-bottom:4px}
+#res.ok{background:var(--P)}#res.tar{background:var(--T)}#res.err{background:var(--rojo)}#res.sal{background:var(--azul2)}#res.rep{background:#6b3fb5}
+#res a{display:block;margin-top:10px;background:#25d366;color:#fff;text-align:center;padding:11px;border-radius:9px;font-weight:700;text-decoration:none}
+h2{font-size:15px;color:#aab3dd;margin:16px 0 6px}
+#hist div{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #26306a;font-size:14px}
+#hist span:last-child{font-weight:700}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header><b>Escáner QR · I.E. San Miguel de Acos</b><button id="bSalir" class="hidden" onclick="salir()">Salir</button></header>
+<main>
+
+ <!-- 1) Configurar enlace (solo la primera vez) -->
+ <section id="vUrl" class="card hidden">
+  <h1>Conectar con su sistema</h1>
+  <p>Pegue el enlace de su sistema (el que termina en <b>/exec</b>). Solo se pide la primera vez.</p>
+  <label for="iUrl">Enlace del sistema</label>
+  <input id="iUrl" placeholder="https://script.google.com/macros/s/…/exec">
+  <button class="btn" onclick="guardarUrl()">Conectar</button>
+  <div class="err" id="eUrl"></div>
+ </section>
+
+ <!-- 2) Ingresar -->
+ <section id="vLogin" class="card hidden">
+  <h1>Ingresar</h1>
+  <p>Use el mismo usuario y clave del sistema.</p>
+  <label for="iU">Usuario</label><input id="iU" autocomplete="username">
+  <label for="iC">Clave</label><input id="iC" type="password" autocomplete="current-password">
+  <button class="btn" id="bIn" onclick="entrar()">Ingresar</button>
+  <div class="err" id="eLog"></div>
+  <p style="margin-top:14px"><a href="#" onclick="cambiarUrl();return false">Cambiar enlace del sistema</a></p>
+ </section>
+
+ <!-- 3) Escáner -->
+ <section id="vScan" class="hidden">
+  <div class="mov"><button id="bE" onclick="setMov('Entrada')">Entrada</button><button id="bS" class="s" onclick="setMov('Salida')">Salida</button></div>
+  <div id="r"></div>
+  <div id="res">Apunte la cámara al código QR del carnet</div>
+  <h2>Últimos registros</h2>
+  <div id="hist"></div>
+ </section>
+</main>
+
+<script>
+var URL_SIS='', TK='', MOV='Entrada', qr=null, ult='', ultT=0, ocupado=false;
+function $(i){return document.getElementById(i);}
+function ver(v){['vUrl','vLogin','vScan'].forEach(function(x){$(x).classList.toggle('hidden',x!==v);});$('bSalir').classList.toggle('hidden',v!=='vScan');}
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k)||'';if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){return '';}}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+var AC=null;
+function tono(f,ini,dur){var o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.type='sine';g.gain.value=.25;o.connect(g);g.connect(AC.destination);o.start(AC.currentTime+ini);o.stop(AC.currentTime+ini+dur);}
+/* tipo: 'ok' = registrado, 'rep' = ya marcó, 'err' = error */
+function bip(tipo){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();
+  if(tipo==='ok'){tono(880,0,.12);tono(1320,.13,.15);if(navigator.vibrate)navigator.vibrate(80);}
+  else if(tipo==='rep'){tono(520,0,.12);tono(520,.2,.12);if(navigator.vibrate)navigator.vibrate([60,80,60]);}
+  else {tono(200,0,.45);if(navigator.vibrate)navigator.vibrate(300);}
+}catch(e){}}
+function siguiente(){setTimeout(function(){var R=$('res');R.className='';R.innerHTML='✅ Listo para el siguiente carnet';},2500);}
+
+function api(datos){
+  return fetch(URL_SIS,{method:'POST',body:JSON.stringify(datos)}).then(function(r){return r.json();});
+}
+
+/* ---- Inicio ---- */
+var URL_FIJA='https://script.google.com/macros/s/AKfycbxxiLyEgxuwvo3MisGNSgS1JGjqo3sSN7PPtNUxl5ZS2wfYKDvWYXDGC75Y0INliDydIQ/exec';
+URL_SIS=ls('qr_url')||URL_FIJA; TK=ls('qr_tk'); MOV=ls('qr_mov')||'Entrada';
+if(!URL_SIS) ver('vUrl'); else if(!TK) ver('vLogin'); else iniciarEscaner();
+
+function guardarUrl(){
+  var u=$('iUrl').value.trim();
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(u)){$('eUrl').textContent='El enlace debe empezar con https://script.google.com/macros/s/ y terminar en /exec';return;}
+  $('eUrl').textContent='Probando conexión…'; URL_SIS=u;
+  api({accion:'ping'}).then(function(r){ if(r.ok){ls('qr_url',u);$('eUrl').textContent='';ver('vLogin');} else $('eUrl').textContent='El sistema respondió con error.'; })
+  .catch(function(){$('eUrl').textContent='No se pudo conectar. ¿Agregó el archivo Api.gs y publicó una nueva versión?';});
+}
+function cambiarUrl(){ls('qr_url',null);ls('qr_tk',null);URL_SIS='';$('iUrl').value='';ver('vUrl');}
+function entrar(){
+  $('bIn').disabled=true; $('eLog').textContent='Verificando…';
+  api({accion:'login',usuario:$('iU').value,clave:$('iC').value}).then(function(r){
+    $('bIn').disabled=false;
+    if(!r.ok){$('eLog').textContent=r.msg||'Usuario o clave incorrectos.';return;}
+    TK=r.token; ls('qr_tk',TK); $('eLog').textContent=''; iniciarEscaner();
+  }).catch(function(){$('bIn').disabled=false;$('eLog').textContent='Sin conexión con el sistema.';});
+}
+function salir(){ if(qr){qr.stop().catch(function(){});qr=null;} ls('qr_tk',null); TK=''; ver('vLogin'); }
+
+/* ---- Escáner ---- */
+function setMov(m){MOV=m;ls('qr_mov',m);$('bE').className=m==='Entrada'?'on':'';$('bS').className='s'+(m==='Salida'?' on':'');}
+function iniciarEscaner(){
+  ver('vScan'); setMov(MOV);
+  if(qr) return;
+  qr=new Html5Qrcode('r');
+  qr.start({facingMode:'environment'},{fps:10,qrbox:{width:240,height:240}},leido,function(){})
+   .catch(function(){qr=null;var R=$('res');R.className='err';R.innerHTML='<b>No se pudo abrir la cámara</b>Toque el candado de la barra de direcciones, permita la cámara y recargue la página.';});
+}
+function leido(t){
+  var n=Date.now(); if(ocupado||(t===ult&&n-ultT<5000)) return; ult=t; ultT=n; ocupado=true;
+  var R=$('res'); R.className=''; R.innerHTML='Registrando '+esc(t)+'…';
+  api({accion:'registrar',token:TK,codigo:t,movimiento:MOV}).then(function(r){
+    ocupado=false;
+    if(r.sesion){salir();$('eLog').textContent='Su sesión terminó. Ingrese nuevamente.';return;}
+    if(!r.ok){R.className=r.repetido?'rep':'err';R.innerHTML='<b>'+(r.repetido?'Ya marcó':'No se registró')+'</b>'+esc(r.msg);bip(r.repetido?'rep':'err');siguiente();return;}
+    R.className=r.estado==='Tardanza'?'tar':(r.movimiento==='Salida'?'sal':'ok');
+    R.innerHTML='<b>'+esc(r.nombres)+'</b>'+esc((r.grado+' '+r.seccion).trim())+' · '+r.movimiento+' '+r.hora+' · <strong>'+esc(r.estado)+'</strong>'+
+      (r.whatsapp?'<a href="'+r.whatsapp+'" target="_blank" rel="noopener">Avisar por WhatsApp</a>':'');
+    bip('ok'); siguiente();
+    var h=$('hist'), d=document.createElement('div'); d.innerHTML='<span>'+r.hora+' · '+esc(r.nombres)+'</span><span>'+esc(r.estado)+'</span>'; h.insertBefore(d,h.firstChild);
+    while(h.children.length>15) h.removeChild(h.lastChild);
+  }).catch(function(){ocupado=false;R.className='err';R.innerHTML='<b>Sin conexión</b>Revise el internet e intente de nuevo.';bip('err');});
+}
+</script>
+</body>
+</html>
