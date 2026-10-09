@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cabina de votación – I.E. San Miguel de Acos</title>
+<script src="https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/dist/iife/ponyfill.js"></script>
+<style>
+:root{--azul:#14286b;--azul2:#1f3a9a;--rojo:#c8102e;--oro:#e3b23c;--verde:#1e8e4e}
+*{box-sizing:border-box;margin:0}
+body{font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#0d1433;color:#fff;min-height:100vh}
+header{background:var(--azul);border-bottom:5px solid var(--oro);padding:12px 16px;text-align:center}
+header b{font-size:18px;display:block}header span{font-size:13px;opacity:.8}
+main{max-width:560px;margin:0 auto;padding:14px}
+.card{background:#fff;color:#1b2240;border-radius:16px;padding:20px;margin-top:20px;border-top:6px solid var(--oro)}
+.card h1{font-size:22px;color:var(--azul);margin-bottom:6px}.card p{color:#5a6285;font-size:15px;margin-bottom:12px}
+.big{width:100%;padding:14px;border:2px solid #d5dbeb;border-radius:10px;font-size:26px;text-align:center;letter-spacing:4px}
+.btn{width:100%;margin-top:12px;padding:16px;border:0;border-radius:12px;background:var(--azul);color:#fff;font-size:19px;font-weight:800;cursor:pointer}
+.err{color:var(--rojo);font-weight:700;margin-top:10px;min-height:20px}
+.paso{display:inline-block;background:var(--oro);color:#1b2240;font-weight:900;border-radius:20px;padding:4px 12px;font-size:14px;margin-bottom:8px}
+#r{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3}
+#r video{width:100%;height:100%;object-fit:cover;display:block}
+#r .marco{position:absolute;inset:12%;border:4px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}
+#aviso{margin-top:12px;border-radius:14px;padding:14px;background:#3a4478;font-size:18px;text-align:center;min-height:56px;font-weight:600}
+#aviso.err{background:var(--rojo)}#aviso.cer{background:#5a6285}#aviso.ok{background:var(--verde)}
+.dni{display:flex;gap:8px;margin-top:12px}
+.dni input{flex:1;padding:14px;border:0;border-radius:12px;font-size:22px;text-align:center;letter-spacing:3px;min-width:0}
+.dni button{padding:0 18px;border:0;border-radius:12px;background:var(--oro);color:#1b2240;font-size:17px;font-weight:900;cursor:pointer}
+.hola{background:#fff;color:#1b2240;border-radius:14px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.hola b{display:block;font-size:18px;color:var(--azul)}.hola span{font-size:14px;color:#5a6285}.hola .x{margin-left:auto;background:#e6e9f3;border:0;border-radius:10px;padding:10px 12px;font-weight:700;color:#5a6285;cursor:pointer}
+.cedula{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.op{background:#fff;color:#1b2240;border:0;border-radius:14px;padding:12px 8px;text-align:center;cursor:pointer;font-family:inherit}
+.op .lg{height:70px;display:flex;align-items:center;justify-content:center}.op .lg img{max-height:70px;max-width:100%;object-fit:contain}
+.op .lg i{font-style:normal;font-size:44px;color:#aab}
+.op b{display:block;font-size:15px;margin-top:6px}.op span{display:block;font-size:12px;color:#5a6285}
+.op .n{display:inline-block;background:var(--azul);color:#fff;border-radius:12px;padding:1px 8px;font-size:12px;font-weight:800}
+#conf{position:fixed;inset:0;background:rgba(8,12,35,.94);display:flex;align-items:center;justify-content:center;padding:16px;z-index:9}
+#conf .caja{background:#fff;color:#1b2240;border-radius:20px;padding:22px;width:100%;max-width:440px;text-align:center}
+#conf .lg{height:140px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
+#conf .lg img{max-height:140px;max-width:220px;object-fit:contain}#conf .lg .sin{font-size:80px;color:#aab}
+#conf .pre{font-size:16px;color:#5a6285}#conf h2{font-size:25px;color:var(--azul);margin:4px 0}
+#conf .seu{font-size:17px;font-weight:700;color:#a07400}#conf .can{font-size:17px;color:#3a4160}
+#conf .si{background:var(--verde);font-size:24px;padding:20px}#conf .no{background:#8a91ad;font-size:17px}
+#gracias{position:fixed;inset:0;background:var(--verde);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;text-align:center;padding:20px}
+#gracias b{font-size:56px}#gracias span{font-size:22px;margin-top:10px}#gracias em{font-style:normal;font-size:40px;font-weight:900;margin-top:24px;background:#fff;color:var(--verde);padding:10px 26px;border-radius:16px}
+.hidden{display:none!important}
+small.pie{display:block;text-align:center;margin-top:16px;color:#8f98c4}small.pie a{color:#8f98c4}
+</style>
+</head>
+<body>
+<header><b>🗳️ Elecciones del Municipio Escolar 2026</b><span id="ie">I.E. San Miguel de Acos</span></header>
+<main>
+ <section id="vMesa" class="card hidden">
+  <h1>Código de mesa</h1>
+  <p>Escriba el código de 6 números que aparece en <b>Comité electoral → Votación y resultados</b>.</p>
+  <input class="big" id="iMesa" inputmode="numeric" maxlength="6" autocomplete="off" onkeydown="if(event.key==='Enter')guardarMesa()">
+  <button class="btn" onclick="guardarMesa()">Entrar</button>
+  <div class="err" id="eMesa"></div>
+ </section>
+ <section id="vCab" class="hidden">
+  <div id="hola" class="hola hidden"></div>
+  <div id="r"></div>
+  <div id="aviso">Cargando…</div>
+  <div id="zDni" class="dni hidden">
+   <input id="iDni" inputmode="numeric" placeholder="o escriba su DNI" autocomplete="off" onkeydown="if(event.key==='Enter')buscarDni()">
+   <button onclick="buscarDni()">Buscar</button>
+  </div>
+  <div id="zCed" class="hidden"><div class="cedula" id="cedula"></div></div>
+  <small class="pie"><a href="#" onclick="cambiarMesa();return false">Cambiar código de mesa</a></small>
+ </section>
+</main>
+<div id="conf" class="hidden"><div class="caja">
+ <div class="lg" id="cLg"></div>
+ <div class="pre">Usted eligió:</div>
+ <h2 id="cNom"></h2><div class="seu" id="cSeu"></div><div class="can" id="cCan"></div>
+ <button class="btn si" id="bSi" onclick="votar()">✔ Sí, votar</button>
+ <button class="btn no" onclick="cancelar()">✖ Cambiar</button>
+ <div class="err" id="eConf"></div>
+</div></div>
+<div id="gracias" class="hidden"><b>✔ ¡VOTÓ!</b><span id="gNom"></span><em>¡SIGUIENTE!</em></div>
+<script>
+var URL_SIS='https://script.google.com/macros/s/AKfycbxxiLyEgxuwvo3MisGNSgS1JGjqo3sSN7PPtNUxl5ZS2wfYKDvWYXDGC75Y0INliDydIQ/exec';
+var MESA='', LISTAS={}, ORDEN=[], ESTADO='CERRADA', IDENT=true;
+var PASO='ident', ALUMNO=null, ELEGIDA=null, PAUSA=false, OCUP=false, tVolver=null;
+function $(i){return document.getElementById(i);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k)||'';if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){return '';}}
+function ver(v){$('vMesa').classList.toggle('hidden',v!=='vMesa');$('vCab').classList.toggle('hidden',v!=='vCab');}
+function api(p){
+  var q='?v=elec&mesa='+encodeURIComponent(MESA);for(var k in p)q+='&'+k+'='+encodeURIComponent(p[k]);
+  return fetch(URL_SIS+q,{cache:'no-store'}).then(function(r){return r.json();});
+}
+var AC=null;
+function tono(f,ini,dur){var o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;g.gain.value=.25;o.connect(g);g.connect(AC.destination);o.start(AC.currentTime+ini);o.stop(AC.currentTime+ini+dur);}
+function bip(t){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();
+  if(t==='leido'){tono(1200,0,.08);}else if(t==='ok'){tono(880,0,.12);tono(1320,.13,.18);}else{tono(200,0,.4);}
+  if(navigator.vibrate)navigator.vibrate(t==='err'?300:60);}catch(e){}}
+function hablar(t){try{var u=new SpeechSynthesisUtterance(t);u.lang='es-ES';u.rate=1;var v=speechSynthesis.getVoices().filter(function(x){return /^es/i.test(x.lang);});if(v.length)u.voice=v[0];speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
+var tAv=null;
+function aviso(t,cl,ms){clearTimeout(tAv);var a=$('aviso');a.className=cl||'';a.innerHTML=t;if(ms)tAv=setTimeout(listo,ms);}
+(function(){var m=new URLSearchParams(location.search).get('mesa');if(m){ls('elec_mesa',m);history.replaceState(null,'',location.pathname);}})();
+MESA=ls('elec_mesa');
+window.addEventListener('load',function(){ if(!MESA) ver('vMesa'); else inicio(); });
+function guardarMesa(){
+  var m=$('iMesa').value.replace(/\D/g,''); if(m.length!==6){$('eMesa').textContent='Son 6 números.';return;}
+  MESA=m; ls('elec_mesa',m); $('eMesa').textContent=''; inicio();
+}
+function cambiarMesa(){ls('elec_mesa',null);MESA='';$('iMesa').value='';ver('vMesa');}
+var iniciado=false;
+function inicio(){
+  $('eMesa').textContent='Conectando…';
+  cargar().then(function(ok){ if(!ok) return; $('eMesa').textContent=''; ver('vCab'); paso(IDENT?'ident':'voto'); iniciarCamara(); });
+  if(!iniciado){iniciado=true;setInterval(cargar,20000);}
+}
+function cargar(){
+  return api({accion:'datos'}).then(function(r){
+    if(r.mesa){ls('elec_mesa',null);MESA='';ver('vMesa');$('eMesa').textContent='Código de mesa incorrecto o cambiado. Pídalo al comité.';return false;}
+    if(!r.ok){$('eMesa').textContent=r.msg||'Error del sistema.';return false;}
+    LISTAS={}; ORDEN=r.listas; r.listas.forEach(function(l){LISTAS[l.numero]=l;});
+    var cambio=IDENT!==r.identificar; ESTADO=r.estado; IDENT=r.identificar; if(r.ie)$('ie').textContent=r.ie;
+    cedula();
+    if(cambio&&!PAUSA&&!$('vCab').classList.contains('hidden')) paso(IDENT?'ident':'voto');
+    else if(!PAUSA) listo();
+    return true;
+  }).catch(function(){ if(!$('vCab').classList.contains('hidden')) aviso('Sin conexión. Revise el internet.','err'); else $('eMesa').textContent='No se pudo conectar. Revise el internet.'; return false; });
+}
+function cedula(){
+  var h='';
+  ORDEN.forEach(function(l){
+    h+='<button class="op" onclick="elegir(\''+esc(l.numero)+'\')"><div class="lg">'+(l.logo?'<img src="'+l.logo+'">':'<i>'+(l.numero==='BLANCO'?'∅':'?')+'</i>')+'</div>'+
+       (l.numero==='BLANCO'?'':'<span class="n">'+esc(l.numero)+'</span>')+'<b>'+esc(l.lista)+'</b>'+(l.seudonimo?'<span>«'+esc(l.seudonimo)+'»</span>':'')+'<span>'+esc(l.candidato)+'</span></button>';
+  });
+  $('cedula').innerHTML=h;
+}
+function paso(p){
+  PASO=p; clearTimeout(tVolver);
+  $('zDni').classList.toggle('hidden',p!=='ident');
+  $('zCed').classList.toggle('hidden',p!=='voto');
+  var h=$('hola');
+  if(p==='voto'&&ALUMNO){
+    h.innerHTML='<div><b>Hola, '+esc(ALUMNO.nombres)+'</b><span>'+esc((ALUMNO.grado+' '+ALUMNO.seccion).trim())+'</span></div><button class="x" onclick="reiniciar()">No soy yo</button>';
+    h.classList.remove('hidden');
+    tVolver=setTimeout(reiniciar,120000);
+  } else h.classList.add('hidden');
+  if(p==='ident'){$('iDni').value='';}
+  listo();
+}
+function reiniciar(){ALUMNO=null;ELEGIDA=null;$('conf').classList.add('hidden');PAUSA=false;paso(IDENT?'ident':'voto');window.scrollTo(0,0);}
+function listo(){
+  if(ESTADO!=='ABIERTA') return aviso('🔒 La votación está <b>cerrada</b>','cer');
+  if(PASO==='ident') aviso('<span class="paso">PASO 1</span><br>Acerque su <b>carnet</b> a la cámara<br><small>Si no lee, escriba su DNI abajo</small>');
+  else aviso('<span class="paso">'+(IDENT?'PASO 2':'VOTE')+'</span><br>Acerque el <b>QR de su lista</b><br><small>o toque su lista abajo</small>');
+}
+var DET=null, VID=null, CAN=null, CTX=null, corriendo=false;
+function crearDetector(){
+  var nativo=window.BarcodeDetector;
+  var p=nativo&&nativo.getSupportedFormats?nativo.getSupportedFormats().catch(function(){return[];}):Promise.resolve([]);
+  return p.then(function(f){
+    DET=f.indexOf('qr_code')>=0?new nativo({formats:['qr_code']}):new window.BarcodeDetectionAPI.BarcodeDetector({formats:['qr_code']});
+  });
+}
+function iniciarCamara(){
+  if(corriendo) return;
+  crearDetector().then(function(){
+    return navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}});
+  }).then(function(st){
+    var tr=st.getVideoTracks()[0];
+    try{var c=tr.getCapabilities?tr.getCapabilities():{};if(c.focusMode&&c.focusMode.indexOf('continuous')>=0)tr.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(function(){});}catch(e){}
+    $('r').innerHTML='<video playsinline muted autoplay></video><div class="marco"></div>';
+    VID=$('r').querySelector('video');VID.srcObject=st;
+    CAN=document.createElement('canvas');CTX=CAN.getContext('2d',{willReadFrequently:true});
+    return VID.play();
+  }).then(function(){corriendo=true;bucle();})
+  .catch(function(){$('r').classList.add('hidden');aviso('<b>No se pudo abrir la cámara.</b> Use el DNI y toque su lista en la pantalla.','err');});
+}
+function bucle(){
+  if(!corriendo) return;
+  if(PAUSA||OCUP||!VID||VID.readyState<2){setTimeout(function(){requestAnimationFrame(bucle);},150);return;}
+  var fuente=VID;
+  if(!(window.BarcodeDetector&&DET instanceof window.BarcodeDetector)){
+    var w=VID.videoWidth,h=VID.videoHeight,k=Math.min(1,800/Math.max(w,h));
+    CAN.width=Math.round(w*k);CAN.height=Math.round(h*k);CTX.drawImage(VID,0,0,CAN.width,CAN.height);
+    fuente=CTX.getImageData(0,0,CAN.width,CAN.height);
+  }
+  DET.detect(fuente).then(function(r){ if(r&&r.length&&r[0].rawValue&&!PAUSA&&!OCUP) leido(String(r[0].rawValue).trim()); })
+  .catch(function(){}).then(function(){requestAnimationFrame(bucle);});
+}
+var ultQR='', ultT=0;
+function leido(t){
+  var n=Date.now(); if(t===ultQR&&n-ultT<3000) return; ultQR=t; ultT=n;
+  if(ESTADO!=='ABIERTA'){aviso('🔒 La votación está <b>cerrada</b>','cer');return;}
+  var m=/^LISTA-(.+)$/i.exec(t);
+  if(PASO==='ident'){
+    if(m){bip('err');aviso('Primero identifíquese con su <b>carnet</b> o su <b>DNI</b>','err',2500);return;}
+    bip('leido'); identificar(t);
+  } else {
+    if(!m){bip('err');aviso('Ese QR <b>no es de ninguna lista</b>','err',2500);return;}
+    bip('leido'); elegir(m[1].toUpperCase());
+  }
+}
+function buscarDni(){var d=$('iDni').value.replace(/\s/g,'');if(d.length<3){aviso('Escriba su DNI completo','err',2000);return;}identificar(d);}
+function identificar(dato){
+  OCUP=true; aviso('Buscando en el padrón…');
+  api({accion:'identificar',dato:dato}).then(function(r){
+    OCUP=false;
+    if(!r.ok){ if(r.cerrada)ESTADO='CERRADA'; bip('err'); aviso('<b>'+esc(r.msg||'No encontrado')+'</b>',r.yaVoto?'cer':'err',3500); $('iDni').value=''; return; }
+    ALUMNO=r; bip('ok'); paso('voto');
+  }).catch(function(){OCUP=false;bip('err');aviso('Sin conexión. Intente de nuevo.','err',2500);});
+}
+function elegir(num){
+  if(ESTADO!=='ABIERTA') return listo();
+  if(PASO!=='voto') return;
+  var l=LISTAS[num]; if(!l){bip('err');aviso('Ese QR <b>no es de ninguna lista</b>','err',2500);return;}
+  PAUSA=true; ELEGIDA=l;
+  $('cLg').innerHTML=l.logo?'<img src="'+l.logo+'">':'<span class="sin">'+(l.numero==='BLANCO'?'∅':'?')+'</span>';
+  $('cNom').textContent=(l.numero==='BLANCO'?'':'Lista '+l.numero+' · ')+l.lista;
+  $('cSeu').textContent=l.seudonimo?'«'+l.seudonimo+'»':''; $('cCan').textContent=l.candidato||'';
+  $('eConf').textContent=''; $('bSi').disabled=false;
+  $('conf').classList.remove('hidden');
+}
+function cancelar(){ $('conf').classList.add('hidden'); ELEGIDA=null; setTimeout(function(){PAUSA=false;listo();},500); }
+function votar(){
+  if(!ELEGIDA) return;
+  $('bSi').disabled=true; $('eConf').textContent='Registrando…';
+  api({accion:'votar',n:ELEGIDA.numero,id:ALUMNO?ALUMNO.codigo:''}).then(function(r){
+    if(!r.ok){
+      if(r.cerrada)ESTADO='CERRADA';
+      bip('err');
+      if(r.yaVoto||r.cerrada){ $('eConf').textContent=r.msg; setTimeout(reiniciar,2500); return; }
+      $('bSi').disabled=false; $('eConf').textContent=r.msg||'No se registró.'; return;
+    }
+    bip('ok'); $('conf').classList.add('hidden'); ELEGIDA=null;
+    $('gNom').textContent=ALUMNO?ALUMNO.nombres+' ya votó':'Voto registrado'; ALUMNO=null;
+    $('gracias').classList.remove('hidden');
+    setTimeout(function(){hablar('Votó. ¡Siguiente!');},350);
+    setTimeout(function(){$('gracias').classList.add('hidden');reiniciar();},2500);
+  }).catch(function(){ $('bSi').disabled=false; $('eConf').textContent='Sin conexión. Toque otra vez "Sí, votar".'; bip('err'); });
+}
+</script>
+</body>
+</html>
