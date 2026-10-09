@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Escáner QR – I.E. San Miguel de Acos</title>
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/dist/iife/ponyfill.js"></script>
 <style>
 :root{--azul:#14286b;--azul2:#1f3a9a;--rojo:#c8102e;--oro:#e3b23c;--P:#1e8e4e;--T:#d98a00}
 *{box-sizing:border-box;margin:0}
@@ -23,7 +23,10 @@ input{width:100%;padding:12px;border:2px solid #d5dbeb;border-radius:10px;font-s
 .mov{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#1c2656;border-radius:12px;padding:5px;margin-bottom:12px}
 .mov button{border:0;padding:14px;border-radius:9px;font-size:20px;font-weight:800;background:none;color:#8f98c4}
 .mov button.on{background:var(--azul2);color:#fff}.mov button.on.s{background:var(--rojo)}
-#r{border-radius:14px;overflow:hidden;background:#000}
+#r{position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3}
+#r video{width:100%;height:100%;object-fit:cover;display:block}
+#r .marco{position:absolute;inset:12%;border:4px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.25);transition:border-color .15s}
+#r .marco.si{border-color:#3ef08a}
 #res{margin-top:12px;border-radius:14px;padding:16px;background:#3a4478;font-size:17px;min-height:70px}
 #res b{display:block;font-size:24px;line-height:1.1;margin-bottom:4px}
 #res.ok{background:var(--P)}#res.tar{background:var(--T)}#res.err{background:var(--rojo)}#res.sal{background:var(--azul2)}#res.rep{background:#6b3fb5}
@@ -37,8 +40,6 @@ h2{font-size:15px;color:#aab3dd;margin:16px 0 6px}
 <body>
 <header><b>Escáner QR · I.E. San Miguel de Acos</b><button id="bSalir" class="hidden" onclick="salir()">Salir</button></header>
 <main>
-
- <!-- 1) Configurar enlace (solo la primera vez) -->
  <section id="vUrl" class="card hidden">
   <h1>Conectar con su sistema</h1>
   <p>Pegue el enlace de su sistema (el que termina en <b>/exec</b>). Solo se pide la primera vez.</p>
@@ -47,8 +48,6 @@ h2{font-size:15px;color:#aab3dd;margin:16px 0 6px}
   <button class="btn" onclick="guardarUrl()">Conectar</button>
   <div class="err" id="eUrl"></div>
  </section>
-
- <!-- 2) Ingresar -->
  <section id="vLogin" class="card hidden">
   <h1>Ingresar</h1>
   <p>Use el mismo usuario y clave del sistema.</p>
@@ -58,8 +57,6 @@ h2{font-size:15px;color:#aab3dd;margin:16px 0 6px}
   <div class="err" id="eLog"></div>
   <p style="margin-top:14px"><a href="#" onclick="cambiarUrl();return false">Cambiar enlace del sistema</a></p>
  </section>
-
- <!-- 3) Escáner -->
  <section id="vScan" class="hidden">
   <div class="mov"><button id="bE" onclick="setMov('Entrada')">Entrada</button><button id="bS" class="s" onclick="setMov('Salida')">Salida</button></div>
   <div id="r"></div>
@@ -68,32 +65,28 @@ h2{font-size:15px;color:#aab3dd;margin:16px 0 6px}
   <div id="hist"></div>
  </section>
 </main>
-
 <script>
-var URL_SIS='', TK='', MOV='Entrada', qr=null, ult='', ultT=0, ocupado=false;
+var URL_SIS='', TK='', MOV='Entrada', qr=null;
 function $(i){return document.getElementById(i);}
 function ver(v){['vUrl','vLogin','vScan'].forEach(function(x){$(x).classList.toggle('hidden',x!==v);});$('bSalir').classList.toggle('hidden',v!=='vScan');}
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k)||'';if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){return '';}}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 var AC=null;
 function tono(f,ini,dur){var o=AC.createOscillator(),g=AC.createGain();o.frequency.value=f;o.type='sine';g.gain.value=.25;o.connect(g);g.connect(AC.destination);o.start(AC.currentTime+ini);o.stop(AC.currentTime+ini+dur);}
-/* tipo: 'ok' = registrado, 'rep' = ya marcó, 'err' = error */
 function bip(tipo){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();
-  if(tipo==='ok'){tono(880,0,.12);tono(1320,.13,.15);if(navigator.vibrate)navigator.vibrate(80);}
+  if(tipo==='leido'){tono(1200,0,.08);if(navigator.vibrate)navigator.vibrate(50);}
+  else if(tipo==='ok'){tono(880,0,.12);tono(1320,.13,.15);if(navigator.vibrate)navigator.vibrate(80);}
   else if(tipo==='rep'){tono(520,0,.12);tono(520,.2,.12);if(navigator.vibrate)navigator.vibrate([60,80,60]);}
   else {tono(200,0,.45);if(navigator.vibrate)navigator.vibrate(300);}
 }catch(e){}}
-function siguiente(){setTimeout(function(){var R=$('res');R.className='';R.innerHTML='✅ Listo para el siguiente carnet';},2500);}
-
+var tSig=null;
+function siguiente(){clearTimeout(tSig);tSig=setTimeout(function(){var R=$('res');R.className='';R.innerHTML='✅ Listo para el siguiente carnet';},1800);}
 function api(datos){
   return fetch(URL_SIS,{method:'POST',body:JSON.stringify(datos)}).then(function(r){return r.json();});
 }
-
-/* ---- Inicio ---- */
 var URL_FIJA='https://script.google.com/macros/s/AKfycbxxiLyEgxuwvo3MisGNSgS1JGjqo3sSN7PPtNUxl5ZS2wfYKDvWYXDGC75Y0INliDydIQ/exec';
 URL_SIS=ls('qr_url')||URL_FIJA; TK=ls('qr_tk'); MOV=ls('qr_mov')||'Entrada';
-if(!URL_SIS) ver('vUrl'); else if(!TK) ver('vLogin'); else iniciarEscaner();
-
+window.addEventListener('load',function(){ if(!URL_SIS) ver('vUrl'); else if(!TK) ver('vLogin'); else iniciarEscaner(); });
 function guardarUrl(){
   var u=$('iUrl').value.trim();
   if(!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/.test(u)){$('eUrl').textContent='El enlace debe empezar con https://script.google.com/macros/s/ y terminar en /exec';return;}
@@ -110,32 +103,113 @@ function entrar(){
     TK=r.token; ls('qr_tk',TK); $('eLog').textContent=''; iniciarEscaner();
   }).catch(function(){$('bIn').disabled=false;$('eLog').textContent='Sin conexión con el sistema.';});
 }
-function salir(){ if(qr){qr.stop().catch(function(){});qr=null;} ls('qr_tk',null); TK=''; ver('vLogin'); }
-
-/* ---- Escáner ---- */
+function salir(){ pararCamara(); ls('qr_tk',null); TK=''; ver('vLogin'); }
 function setMov(m){MOV=m;ls('qr_mov',m);$('bE').className=m==='Entrada'?'on':'';$('bS').className='s'+(m==='Salida'?' on':'');}
+var DET=null, VID=null, CAN=null, CTX=null, corriendo=false;
+function crearDetector(){
+  if(DET) return Promise.resolve(DET);
+  var nativo=window.BarcodeDetector;
+  var p=nativo&&nativo.getSupportedFormats?nativo.getSupportedFormats().catch(function(){return[];}):Promise.resolve([]);
+  return p.then(function(f){
+    if(f.indexOf('qr_code')>=0) DET=new nativo({formats:['qr_code']});
+    else DET=new window.BarcodeDetectionAPI.BarcodeDetector({formats:['qr_code']});
+    return DET;
+  });
+}
 function iniciarEscaner(){
   ver('vScan'); setMov(MOV);
   if(qr) return;
-  qr=new Html5Qrcode('r');
-  qr.start({facingMode:'environment'},{fps:10,qrbox:{width:240,height:240}},leido,function(){})
-   .catch(function(){qr=null;var R=$('res');R.className='err';R.innerHTML='<b>No se pudo abrir la cámara</b>Toque el candado de la barra de direcciones, permita la cámara y recargue la página.';});
+  qr={};
+  var R=$('res');
+  crearDetector().then(function(){
+    return navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}});
+  }).then(function(st){
+    qr.st=st;
+    var tr=st.getVideoTracks()[0];
+    try{var c=tr.getCapabilities?tr.getCapabilities():{};
+      if(c.focusMode&&c.focusMode.indexOf('continuous')>=0) tr.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(function(){});}catch(e){}
+    $('r').innerHTML='<video playsinline muted autoplay></video><div class="marco" id="marco"></div>';
+    VID=$('r').querySelector('video'); VID.srcObject=st;
+    CAN=document.createElement('canvas'); CTX=CAN.getContext('2d',{willReadFrequently:true});
+    return VID.play();
+  }).then(function(){
+    corriendo=true; bucle(); despertar(); procesarCola();
+  }).catch(function(e){
+    qr=null; R.className='err';
+    R.innerHTML='<b>No se pudo abrir la cámara</b>Toque el candado de la barra de direcciones, permita la cámara y recargue la página.';
+  });
 }
+function pararCamara(){corriendo=false;if(qr&&qr.st)qr.st.getTracks().forEach(function(t){t.stop();});qr=null;}
+function bucle(){
+  if(!corriendo) return;
+  if(!VID||VID.readyState<2){requestAnimationFrame(bucle);return;}
+  var fuente=VID;
+  if(!(window.BarcodeDetector&&DET instanceof window.BarcodeDetector)){
+    var w=VID.videoWidth,h=VID.videoHeight,k=Math.min(1,800/Math.max(w,h));
+    CAN.width=Math.round(w*k); CAN.height=Math.round(h*k);
+    CTX.drawImage(VID,0,0,CAN.width,CAN.height);
+    fuente=CTX.getImageData(0,0,CAN.width,CAN.height);
+  }
+  DET.detect(fuente).then(function(r){
+    if(r&&r.length&&r[0].rawValue){
+      var m=$('marco'); if(m){m.classList.add('si');setTimeout(function(){m.classList.remove('si');},300);}
+      leido(String(r[0].rawValue).trim());
+    }
+  }).catch(function(){}).then(function(){requestAnimationFrame(bucle);});
+}
+var vistos={}, COLA=[], enCurso=0, MAX_PAR=3;
+try{COLA=JSON.parse(ls('qr_cola')||'[]');}catch(e){COLA=[];}
+function guardarCola(){ls('qr_cola',JSON.stringify(COLA.map(function(x){return{id:x.id,codigo:x.codigo,mov:x.mov,hora:x.hora};})));}
+function hora(){var d=new Date();return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2);}
 function leido(t){
-  var n=Date.now(); if(ocupado||(t===ult&&n-ultT<5000)) return; ult=t; ultT=n; ocupado=true;
-  var R=$('res'); R.className=''; R.innerHTML='Registrando '+esc(t)+'…';
-  api({accion:'registrar',token:TK,codigo:t,movimiento:MOV}).then(function(r){
-    ocupado=false;
-    if(r.sesion){salir();$('eLog').textContent='Su sesión terminó. Ingrese nuevamente.';return;}
-    if(!r.ok){R.className=r.repetido?'rep':'err';R.innerHTML='<b>'+(r.repetido?'Ya marcó':'No se registró')+'</b>'+esc(r.msg);bip(r.repetido?'rep':'err');siguiente();return;}
-    R.className=r.estado==='Tardanza'?'tar':(r.movimiento==='Salida'?'sal':'ok');
-    R.innerHTML='<b>'+esc(r.nombres)+'</b>'+esc((r.grado+' '+r.seccion).trim())+' · '+r.movimiento+' '+r.hora+' · <strong>'+esc(r.estado)+'</strong>'+
-      (r.whatsapp?'<a href="'+r.whatsapp+'" target="_blank" rel="noopener">Avisar por WhatsApp</a>':'');
-    bip('ok'); siguiente();
-    var h=$('hist'), d=document.createElement('div'); d.innerHTML='<span>'+r.hora+' · '+esc(r.nombres)+'</span><span>'+esc(r.estado)+'</span>'; h.insertBefore(d,h.firstChild);
-    while(h.children.length>15) h.removeChild(h.lastChild);
-  }).catch(function(){ocupado=false;R.className='err';R.innerHTML='<b>Sin conexión</b>Revise el internet e intente de nuevo.';bip('err');});
+  var n=Date.now(); if(vistos[t]&&n-vistos[t]<4000) return; vistos[t]=n;
+  bip('leido');
+  var R=$('res'); R.className='ok'; R.innerHTML='<b>✔ Leído</b>'+esc(t)+' · registrando…'; siguiente();
+  var it={id:n+'_'+t,codigo:t,mov:MOV,hora:hora()};
+  filaHist(it,'…','registrando');
+  COLA.push(it); guardarCola(); procesarCola();
 }
+function filaHist(it,txt,est){
+  var h=$('hist'), d=$('h_'+it.id);
+  if(!d){d=document.createElement('div');d.id='h_'+it.id;h.insertBefore(d,h.firstChild);while(h.children.length>20)h.removeChild(h.lastChild);}
+  d.style.opacity=est==='registrando'?'.6':'1';
+  d.innerHTML='<span>'+esc(it.hora)+' · '+esc(it.nom||it.codigo)+'</span><span style="color:'+(est==='error'?'#ff6b7d':est==='rep'?'#c9a7ff':est==='Tardanza'?'#ffb52e':'#7ee2a4')+'">'+esc(txt)+'</span>';
+}
+function procesarCola(){
+  while(enCurso<MAX_PAR){
+    var it=null; for(var i=0;i<COLA.length;i++){if(!COLA[i].envio){it=COLA[i];break;}}
+    if(!it||!TK) return;
+    it.envio=true; enCurso++; enviar(it);
+  }
+}
+function quitar(it){COLA=COLA.filter(function(x){return x!==it;});guardarCola();}
+function enviar(it){
+  api({accion:'registrar',token:TK,codigo:it.codigo,movimiento:it.mov,horaCliente:it.hora}).then(function(r){
+    enCurso--; quitar(it);
+    if(r.sesion){salir();$('eLog').textContent='Su sesión terminó. Ingrese nuevamente.';return;}
+    var R=$('res'), ultimo=COLA.length===0;
+    if(!r.ok){
+      filaHist(it,r.repetido?'Ya marcó':'No se registró',r.repetido?'rep':'error');
+      R.className=r.repetido?'rep':'err';R.innerHTML='<b>'+(r.repetido?'Ya marcó':'No se registró')+'</b>'+esc(it.codigo)+' · '+esc(r.msg);
+      bip(r.repetido?'rep':'err'); siguiente();
+    }else{
+      it.nom=r.nombres; it.hora=r.hora||it.hora; filaHist(it,r.estado,r.estado);
+      if(ultimo){
+        R.className=r.estado==='Tardanza'?'tar':(r.movimiento==='Salida'?'sal':'ok');
+        R.innerHTML='<b>'+esc(r.nombres)+'</b>'+esc(((r.grado||'')+' '+(r.seccion||'')).trim())+' · '+esc(r.movimiento)+' '+esc(r.hora)+' · <strong>'+esc(r.estado)+'</strong>'+
+          (r.whatsapp?'<a href="'+r.whatsapp+'" target="_blank" rel="noopener">Avisar por WhatsApp</a>':'');
+        clearTimeout(tSig); if(!r.whatsapp) siguiente();
+      }
+    }
+    procesarCola();
+  }).catch(function(){
+    enCurso--; it.envio=false; filaHist(it,'Sin conexión, reintentando','error');
+    setTimeout(procesarCola,4000);
+  });
+}
+var tDesp=null;
+function despertar(){clearInterval(tDesp);api({accion:'ping'}).catch(function(){});tDesp=setInterval(function(){if(!document.hidden)api({accion:'ping'}).catch(function(){});},240000);}
+window.addEventListener('online',procesarCola);
 </script>
 </body>
 </html>
